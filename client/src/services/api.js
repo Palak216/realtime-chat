@@ -7,11 +7,17 @@ const API = axios.create({
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
-  console.log("Token:", token); // <-- Add this
+  console.log("======================");
+  console.log("🚀 Axios Request");
+  console.log("URL:", config.baseURL + config.url);
+  console.log("Method:", config.method);
+  console.log("Body:", config.data);
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  console.log("Headers:", config.headers);
 
   return config;
 });

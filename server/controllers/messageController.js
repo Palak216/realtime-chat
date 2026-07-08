@@ -8,18 +8,18 @@ import { io, getReceiverSocketId } from "../socket.js";
 
 export const sendMessage = async (req, res) => {
   try {
-    console.log("==================================");
-    console.log("✅ sendMessage controller called");
+    console.log("\n========================================");
+    console.log("📤 sendMessage Controller Called");
 
     const senderId = req.user.id;
     const receiverId = req.params.receiverId;
 
-    console.log("Sender:", senderId);
-    console.log("Receiver:", receiverId);
+    console.log("Sender ID:", senderId);
+    console.log("Receiver ID:", receiverId);
 
     const { text, image } = req.body;
 
-    console.log("Body:", req.body);
+    console.log("Request Body:", req.body);
 
     if (!text && !image) {
       return res.status(400).json({
@@ -27,6 +27,10 @@ export const sendMessage = async (req, res) => {
         message: "Message cannot be empty",
       });
     }
+
+    // ===============================
+    // Find Conversation
+    // ===============================
 
     let conversation = await Conversation.findOne({
       participants: {
@@ -39,8 +43,14 @@ export const sendMessage = async (req, res) => {
         participants: [senderId, receiverId],
       });
 
-      console.log("✅ Conversation Created");
+      console.log("✅ New Conversation Created");
+    } else {
+      console.log("✅ Existing Conversation Found");
     }
+
+    // ===============================
+    // Save Message
+    // ===============================
 
     const newMessage = await Message.create({
       sender: senderId,
@@ -56,19 +66,33 @@ export const sendMessage = async (req, res) => {
 
     await conversation.save();
 
-    const receiverSocketId =
-      getReceiverSocketId(receiverId);
+    console.log("✅ Conversation Updated");
+
+    // ===============================
+    // Socket
+    // ===============================
+
+    const receiverSocketId = getReceiverSocketId(receiverId);
+
+    console.log("--------------------------------");
+    console.log("Receiver Socket ID:", receiverSocketId);
 
     if (receiverSocketId) {
+      console.log("📨 Sending Socket Event...");
+
       io.to(receiverSocketId).emit(
         "newMessage",
         newMessage
       );
 
-      console.log("📨 Socket Message Sent");
+      console.log("✅ Socket Event Sent");
+    } else {
+      console.log("❌ Receiver Socket NOT Found");
     }
 
-    res.status(201).json({
+    console.log("========================================\n");
+
+    return res.status(201).json({
       success: true,
       message: "Message Sent Successfully",
       data: newMessage,
@@ -77,7 +101,7 @@ export const sendMessage = async (req, res) => {
     console.log("❌ SEND MESSAGE ERROR");
     console.log(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Internal Server Error",
     });
@@ -90,14 +114,14 @@ export const sendMessage = async (req, res) => {
 
 export const getMessages = async (req, res) => {
   try {
-    console.log("==================================");
-    console.log("✅ getMessages controller called");
+    console.log("\n========================================");
+    console.log("📥 getMessages Controller Called");
 
     const senderId = req.user.id;
     const receiverId = req.params.receiverId;
 
-    console.log("Sender:", senderId);
-    console.log("Receiver:", receiverId);
+    console.log("Sender ID:", senderId);
+    console.log("Receiver ID:", receiverId);
 
     const messages = await Message.find({
       $or: [
@@ -115,16 +139,17 @@ export const getMessages = async (req, res) => {
     });
 
     console.log("Messages Found:", messages.length);
+    console.log("========================================\n");
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: messages,
     });
   } catch (error) {
-    console.log("❌ GET MESSAGE ERROR");
+    console.log("❌ GET MESSAGES ERROR");
     console.log(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Internal Server Error",
     });

@@ -5,7 +5,17 @@ import {
   FiMoreVertical,
 } from "react-icons/fi";
 
+import { useChat } from "../../context/ChatContext";
+
 const ChatHeader = ({ selectedUser }) => {
+  const {
+    typingUsers,
+  } = useChat();
+
+  const isTyping =
+    selectedUser &&
+    typingUsers.includes(selectedUser._id);
+
   return (
     <div className="h-20 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800 px-6 flex items-center justify-between shadow-lg">
 
@@ -25,13 +35,19 @@ const ChatHeader = ({ selectedUser }) => {
             </h2>
 
             <p
-              className={`text-sm ${
-                selectedUser.online
+              className={`text-sm font-medium transition-all duration-200 ${
+                isTyping
+                  ? "text-cyan-400"
+                  : selectedUser.online
                   ? "text-green-400"
                   : "text-slate-400"
               }`}
             >
-              {selectedUser.online ? "Online" : "Offline"}
+              {isTyping
+                ? "Typing..."
+                : selectedUser.online
+                ? "Online"
+                : "Offline"}
             </p>
 
           </div>

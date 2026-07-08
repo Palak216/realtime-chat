@@ -14,6 +14,7 @@ import {
 import {
   connectSocket,
   disconnectSocket,
+  getSocket,
 } from "../socket/socket";
 
 const ChatContext = createContext();
@@ -27,6 +28,11 @@ export const ChatProvider = ({ children }) => {
   const [messages, setMessages] = useState([]);
 
   const [onlineUsers, setOnlineUsers] = useState([]);
+
+  const [typingUsers, setTypingUsers] = useState([]);
+
+  const [unreadMessages, setUnreadMessages] =
+    useState({});
 
   const [loadingUsers, setLoadingUsers] =
     useState(false);
@@ -44,11 +50,16 @@ export const ChatProvider = ({ children }) => {
 
       const data = await getUsers();
 
-      console.log("✅ Users:", data);
+      const updatedUsers = (data.users || []).map(
+        (user) => ({
+          ...user,
+          online: onlineUsers.includes(user._id),
+        })
+      );
 
-      setUsers(data.users || []);
-    } catch (error) {
-      console.error("❌ Users Error:", error);
+      setUsers(updatedUsers);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoadingUsers(false);
     }
@@ -59,6 +70,19 @@ export const ChatProvider = ({ children }) => {
   }, []);
 
   // ==========================
+  // Update Online Status
+  // ==========================
+
+  useEffect(() => {
+    setUsers((prev) =>
+      prev.map((user) => ({
+        ...user,
+        online: onlineUsers.includes(user._id),
+      }))
+    );
+  }, [onlineUsers]);
+
+  // ==========================
   // Fetch Messages
   // ==========================
 
@@ -66,21 +90,13 @@ export const ChatProvider = ({ children }) => {
     try {
       setLoadingMessages(true);
 
-      console.log(
-        "📥 Fetch Messages:",
-        receiverId
-      );
-
       const data = await getMessages(receiverId);
 
-      console.log("✅ Messages:", data);
-
       setMessages(data.data || []);
-    } catch (error) {
-      console.error(
-        "❌ Fetch Messages Error:",
-        error
-      );
+
+    } catch (err) {
+      console.error(err);
+
     } finally {
       setLoadingMessages(false);
     }
@@ -88,10 +104,21 @@ export const ChatProvider = ({ children }) => {
 
   useEffect(() => {
     if (selectedUser) {
+
       fetchMessages(selectedUser._id);
+
+      setUnreadMessages((prev) => {
+        const copy = { ...prev };
+
+        delete copy[selectedUser._id];
+
+        return copy;
+      });
+
     } else {
       setMessages([]);
     }
+
   }, [selectedUser]);
 
   // ==========================
@@ -100,39 +127,68 @@ export const ChatProvider = ({ children }) => {
 
   const sendNewMessage = async (text) => {
     try {
-      if (!selectedUser) {
-        console.log("❌ No User Selected");
-        return;
-      }
 
-      console.log("📤 Sending Message...");
-      console.log("Receiver:", selectedUser._id);
-      console.log("Text:", text);
+      if (!selectedUser) return;
 
       const data = await sendMessage(
         selectedUser._id,
         text
       );
 
-      console.log("✅ Send Response:", data);
-
       setMessages((prev) => [
         ...prev,
         data.data,
       ]);
-    } catch (error) {
-      console.error(
-        "❌ Send Message Error:",
-        error
-      );
+
+    } catch (err) {
+      console.error(err);
     }
   };
 
   // ==========================
-  // Socket Connection
+  // Typing
+  // ==========================
+
+  const emitTyping = () => {
+    if (!selectedUser) return;
+
+    const socket = getSocket();
+
+    if (!socket) return;
+
+    const me = JSON.parse(
+      localStorage.getItem("user")
+    );
+
+    socket.emit("typing", {
+      senderId: me.id,
+      receiverId: selectedUser._id,
+    });
+  };
+
+  const emitStopTyping = () => {
+    if (!selectedUser) return;
+
+    const socket = getSocket();
+
+    if (!socket) return;
+
+    const me = JSON.parse(
+      localStorage.getItem("user")
+    );
+
+    socket.emit("stopTyping", {
+      senderId: me.id,
+      receiverId: selectedUser._id,
+    });
+  };
+
+  // ==========================
+  // Socket
   // ==========================
 
   useEffect(() => {
+
     const user = JSON.parse(
       localStorage.getItem("user")
     );
@@ -142,58 +198,134 @@ export const ChatProvider = ({ children }) => {
     const socket = connectSocket(user.id);
 
     socket.on("connect", () => {
-      console.log(
-        "🟢 Socket Connected"
-      );
+      console.log("🟢 Socket Connected");
     });
 
     socket.on(
       "getOnlineUsers",
-      (users) => {
+      (onlineUsersList) => {
+
         console.log(
           "🟢 Online Users:",
-          users
+          onlineUsersList
         );
 
-        setOnlineUsers(users);
+        setOnlineUsers(onlineUsersList);
+
       }
     );
 
-    socket.on("newMessage", (message) => {
+    // ==========================
+    // Typing Events
+    // ==========================
+
+    socket.on("typing", (senderId) => {
+
       console.log(
-        "📩 New Socket Message:",
-        message
+        "⌨️ Typing:",
+        senderId
       );
 
-      setMessages((prev) => [
-        ...prev,
-        message,
-      ]);
+      setTypingUsers((prev) => {
+
+        if (prev.includes(senderId))
+          return prev;
+
+        return [...prev, senderId];
+
+      });
+
     });
 
+    socket.on("stopTyping", (senderId) => {
+
+      console.log(
+        "✋ Stop Typing:",
+        senderId
+      );
+
+      setTypingUsers((prev) =>
+        prev.filter((id) => id !== senderId)
+      );
+
+    });
+
+    // ==========================
+    // New Message
+    // ==========================
+
+    socket.on(
+      "newMessage",
+      (newMessage) => {
+
+        console.log(
+          "📩 New Socket Message:",
+          newMessage
+        );
+
+        if (
+          selectedUser &&
+          (newMessage.sender ===
+            selectedUser._id ||
+            newMessage.receiver ===
+              selectedUser._id)
+        ) {
+
+          setMessages((prev) => [
+            ...prev,
+            newMessage,
+          ]);
+
+        } else {
+
+          setUnreadMessages((prev) => ({
+            ...prev,
+
+            [newMessage.sender]:
+              (prev[newMessage.sender] || 0) + 1,
+          }));
+
+        }
+
+      }
+    );
+
     return () => {
+
+      socket.off("typing");
+      socket.off("stopTyping");
+      socket.off("newMessage");
+      socket.off("getOnlineUsers");
+
       disconnectSocket();
+
     };
-  }, []);
+
+  }, [selectedUser]);
 
   return (
     <ChatContext.Provider
       value={{
         users,
+
         onlineUsers,
+
+        typingUsers,
 
         selectedUser,
         setSelectedUser,
 
         messages,
 
+        unreadMessages,
+
         loadingUsers,
         loadingMessages,
 
-        fetchUsers,
-        fetchMessages,
-
         sendNewMessage,
+
+        emitTyping,
+        emitStopTyping,
       }}
     >
       {children}

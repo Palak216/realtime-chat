@@ -7,16 +7,15 @@ import API from "./api";
 export const getMessages = async (
   receiverId
 ) => {
-  console.log(
-    "📥 Fetching messages:",
-    receiverId
-  );
+  console.log("📥 Fetching Messages");
+  console.log(receiverId);
 
   const { data } = await API.get(
-    `/api/messages/${receiverId}`
+    `/messages/${receiverId}`
   );
 
-  console.log("Messages API:", data);
+  console.log("Messages API:");
+  console.log(data);
 
   return data;
 };
@@ -29,19 +28,19 @@ export const sendMessage = async (
   receiverId,
   text
 ) => {
-  console.log(
-    "📤 Sending message:",
-    text
-  );
+  console.log("🔥 messageService called");
+  console.log("Receiver:", receiverId);
+  console.log("Text:", text);
 
   const { data } = await API.post(
-    `/api/messages/send/${receiverId}`,
+    `/messages/send/${receiverId}`,
     {
       text,
     }
   );
 
-  console.log("Send API:", data);
+  console.log("✅ Message API Response");
+  console.log(data);
 
   return data;
 };

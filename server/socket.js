@@ -2,19 +2,24 @@ import { Server } from "socket.io";
 
 let io;
 
-// Store online users
-// Format:
-// {
-//   userId: socketId
-// }
+// =====================================
+// userId -> socketId
+// =====================================
+
 const userSocketMap = {};
 
-// Get socket id by user id
+// =====================================
+// Get Receiver Socket ID
+// =====================================
+
 export const getReceiverSocketId = (userId) => {
   return userSocketMap[userId];
 };
 
+// =====================================
 // Initialize Socket.IO
+// =====================================
+
 export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
@@ -25,27 +30,94 @@ export const initializeSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log("🟢 User Connected:", socket.id);
+    console.log("====================================");
+    console.log("🟢 Socket Connected");
+    console.log("Socket ID:", socket.id);
 
-    // Get user id from frontend
     const userId = socket.handshake.query.userId;
+
+    console.log("User ID:", userId);
 
     if (userId && userId !== "undefined") {
       userSocketMap[userId] = socket.id;
     }
 
-    // Send updated online users to everyone
+    console.log("Current Online Users:");
+    console.log(userSocketMap);
+
+    // Broadcast Online Users
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
+    // =====================================
+    // Typing
+    // =====================================
+
+    socket.on("typing", ({ senderId, receiverId }) => {
+      console.log(
+        `${senderId} is typing to ${receiverId}`
+      );
+
+      const receiverSocketId =
+        getReceiverSocketId(receiverId);
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit(
+          "typing",
+          senderId
+        );
+      }
+    });
+
+    // =====================================
+    // Stop Typing
+    // =====================================
+
+    socket.on(
+      "stopTyping",
+      ({ senderId, receiverId }) => {
+        console.log(
+          `${senderId} stopped typing`
+        );
+
+        const receiverSocketId =
+          getReceiverSocketId(receiverId);
+
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit(
+            "stopTyping",
+            senderId
+          );
+        }
+      }
+    );
+
+    // =====================================
     // Disconnect
+    // =====================================
+
     socket.on("disconnect", () => {
-      console.log("🔴 User Disconnected:", socket.id);
+      console.log("====================================");
+      console.log("🔴 Socket Disconnected");
+      console.log("Socket ID:", socket.id);
+      console.log("User ID:", userId);
 
-      delete userSocketMap[userId];
+      if (userId) {
+        delete userSocketMap[userId];
+      }
 
-      io.emit("getOnlineUsers", Object.keys(userSocketMap));
+      console.log("Remaining Online Users:");
+      console.log(userSocketMap);
+
+      io.emit(
+        "getOnlineUsers",
+        Object.keys(userSocketMap)
+      );
     });
   });
 };
 
-export { io };
+// =====================================
+// Exports
+// =====================================
+
+export { io, userSocketMap };
