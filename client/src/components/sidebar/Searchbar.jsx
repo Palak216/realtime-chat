@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import SearchBar from "./Searchbar";
-const SearchBar = ({
+const Searchbar = ({
   users,
   setFilteredUsers,
 }) => {
